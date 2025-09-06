@@ -1,22 +1,22 @@
-from agents.client import AgenticOllamaClient
+from agents.client import AgenticLLMClient
 
 
-class Agent(AgenticOllamaClient):
+class Agent(AgenticLLMClient):
     def __init__(
         self,
         name: str,
         description: str,
         model: str,
         system_prompt: str | None = None,
-        ollama_uri: str = "http://localhost:11434/api",
+        LLM_uri: str = "http://localhost:11434/api",
         tools: list[callable] | None = None,
-        **ollama_client_kwargs: object,
+        **LLM_client_kwargs: object,
     ) -> None:
         super().__init__(
-            base_url=ollama_uri,
+            base_url=LLM_uri,
             model_name=model,
             system_prompt=system_prompt,
-            **ollama_client_kwargs,
+            **LLM_client_kwargs,
         )
 
         self.name: str = name
