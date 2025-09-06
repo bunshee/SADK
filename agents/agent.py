@@ -1,28 +1,30 @@
-from agents.client import AgenticLLMClient
+from agents.client import AgenticClient
 
 
-class Agent(AgenticLLMClient):
+class Agent(AgenticClient):
     def __init__(
         self,
         name: str,
         description: str,
         model: str,
         system_prompt: str | None = None,
-        LLM_uri: str = "http://localhost:11434/api",
+        base_url: str = "http://localhost:11434/api/chat",
         tools: list[callable] | None = None,
-        **LLM_client_kwargs: object,
+        api_key: str | None = None,
+        **client_kwargs: object,
     ) -> None:
         super().__init__(
-            base_url=LLM_uri,
+            base_url=base_url,
             model_name=model,
             system_prompt=system_prompt,
-            **LLM_client_kwargs,
+            api_key=api_key,
+            **client_kwargs,
         )
 
         self.name: str = name
         self.description: str = description
         self.model: str = model
-        self.system_prompt: str = system_prompt
+        self.system_prompt: str | None = system_prompt
 
         self.guardrails: list[object] = []
 
