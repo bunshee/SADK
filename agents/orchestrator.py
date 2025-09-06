@@ -2,14 +2,14 @@ import json
 from typing import Any, Dict, List, Optional  # Added Optional for clarity
 
 from agents.agent import Agent
-from agents.client import OllamaClient
+from agents.client import LLMClient
 
 
-class Orchestrator(OllamaClient):
+class Orchestrator(LLMClient):
     """
     The Orchestrator is responsible for selecting and routing user requests
     to the most appropriate AI agent based on their capabilities.
-    It uses its inherited OllamaClient capabilities for decision-making.
+    It uses its inherited LLMClient capabilities for decision-making.
     """
 
     def __init__(
@@ -19,15 +19,15 @@ class Orchestrator(OllamaClient):
         model: str = "llama3",
         system_prompt: str | None = None,
         max_iterations: int = 2,
-        ollama_uri: str = "http://localhost:11434/api",
+        LLM_uri: str = "http://localhost:11434/api",
         agents: List[Agent] | None = None,
-        **ollama_client_kwargs: object,
+        **LLM_client_kwargs: object,
     ):
         super().__init__(
-            base_url=ollama_uri,
+            base_url=LLM_uri,
             model_name=model,
             system_prompt=system_prompt,
-            **ollama_client_kwargs,
+            **LLM_client_kwargs,
         )
 
         self.name = name

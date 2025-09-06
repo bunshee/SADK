@@ -3,9 +3,9 @@ import json
 import requests
 
 
-class OllamaClient:
+class LLMClient:
     """
-    A client for interacting with the Ollama API's /api/chat endpoint.
+    A client for interacting with the LLM API's /api/chat endpoint.
     It handles sending multi-role messages.
     """
 
@@ -30,12 +30,12 @@ class OllamaClient:
             result = response.json()
 
             if "error" in result:
-                raise ValueError(f"Ollama API Error: {result['error']}")
+                raise ValueError(f"LLM API Error: {result['error']}")
             return result
         except requests.exceptions.ConnectionError as e:
             raise requests.exceptions.ConnectionError(
-                f"Error: Could not connect to Ollama at {self.base_url}. "
-                "Please ensure Ollama is installed and running, and the API is accessible."
+                f"Error: Could not connect to LLM at {self.base_url}. "
+                "Please ensure LLM is installed and running, and the API is accessible."
             ) from e
         except requests.exceptions.RequestException as e:
             raise requests.exceptions.RequestException(
@@ -43,7 +43,7 @@ class OllamaClient:
             ) from e
         except json.JSONDecodeError as e:
             raise json.JSONDecodeError(
-                f"Error: Could not decode JSON response from Ollama. Raw response: {response.text}"
+                f"Error: Could not decode JSON response from LLM. Raw response: {response.text}"
             ) from e
 
     def chat(
@@ -55,7 +55,7 @@ class OllamaClient:
         **kwargs,
     ) -> str | dict[str, object]:
         """
-        Sends a list of messages to the Ollama /api/chat endpoint and returns the model's response message.
+        Sends a list of messages to the LLM /api/chat endpoint and returns the model's response message.
         """
         data = {
             "model": model_name,  # Use the passed model_name
@@ -94,15 +94,15 @@ class OllamaClient:
                                         final_message_role = message_part["role"]
                                 elif "error" in json_chunk:
                                     raise ValueError(
-                                        f"Ollama API Error during stream: {json_chunk['error']}"
+                                        f"LLM API Error during stream: {json_chunk['error']}"
                                     )
                             except json.JSONDecodeError:
                                 continue
 
             except requests.exceptions.ConnectionError as e:
                 raise requests.exceptions.ConnectionError(
-                    f"Error: Could not connect to Ollama at {self.base_url} during streaming. "
-                    "Please ensure Ollama is installed and running, and the API is accessible."
+                    f"Error: Could not connect to LLM at {self.base_url} during streaming. "
+                    "Please ensure LLM is installed and running, and the API is accessible."
                 ) from e
             except requests.exceptions.RequestException as e:
                 raise requests.exceptions.RequestException(
@@ -119,13 +119,13 @@ class OllamaClient:
                 return result["message"]
             else:
                 raise ValueError(
-                    f"Unexpected response format from Ollama chat API: {result}"
+                    f"Unexpected response format from LLM chat API: {result}"
                 )
 
 
-class AgenticOllamaClient(OllamaClient):
+class AgenticLLMClient(LLMClient):
     """
-    A client for interacting with the Ollama API's /api/chat endpoint,
+    A client for interacting with the LLM API's /api/chat endpoint,
     with added capabilities for tool integration and automated orchestration.
     """
 
@@ -178,7 +178,7 @@ class AgenticOllamaClient(OllamaClient):
     ) -> list[dict[str, object]] | None:
         """
         Parses tool calls from a model response message.
-        Prioritizes Ollama's native 'tool_calls' structure.
+        Prioritizes LLM's native 'tool_calls' structure.
         """
         tool_calls = []
 
