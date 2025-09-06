@@ -2,10 +2,10 @@ import json
 from typing import Any, Dict, List, Optional  # Added Optional for clarity
 
 from agents.agent import Agent
-from agents.client import LLMClient
+from agents.client import Client
 
 
-class Orchestrator(LLMClient):
+class Orchestrator(Client):
     """
     The Orchestrator is responsible for selecting and routing user requests
     to the most appropriate AI agent based on their capabilities.
@@ -19,15 +19,17 @@ class Orchestrator(LLMClient):
         model: str = "llama3",
         system_prompt: str | None = None,
         max_iterations: int = 2,
-        LLM_uri: str = "http://localhost:11434/api",
+        base_url: str = "http://localhost:11434/api/chat",
+        api_key: str | None = None,
         agents: List[Agent] | None = None,
-        **LLM_client_kwargs: object,
+        **client_kwargs: object,
     ):
         super().__init__(
-            base_url=LLM_uri,
+            base_url=base_url,
             model_name=model,
+            api_key=api_key,
             system_prompt=system_prompt,
-            **LLM_client_kwargs,
+            **client_kwargs,
         )
 
         self.name = name

@@ -3,10 +3,12 @@ import json
 import requests
 
 
-class LLMClient:
+class Client:
     """
-    A client for interacting with the LLM API's /api/chat endpoint.
-    It handles sending multi-role messages.
+    A client for interacting with a Large Language Model (LLM) API.
+    This client is designed to be model-agnostic, supporting various providers
+    through a common interface. It handles API key authentication and makes HTTP
+    requests to the specified base URL.
     """
 
     def __init__(
@@ -14,16 +16,47 @@ class LLMClient:
         base_url: str,
         model_name: str,
         system_prompt: str | None = None,
-        **kwargs,  # For other default chat parameters
+        api_key: str | None = None,
+        **kwargs,
     ):
+        """
+        Initializes the client with the necessary API information.
+
+        Args:
+            base_url (str): The base URL of the LLM API.
+            model_name (str): The default model to use for requests.
+            system_prompt (str | None): A default system prompt to prepend to messages.
+            api_key (str | None): The API key for authentication.
+            **kwargs: Additional default parameters for chat requests.
+        """
         self.base_url = base_url
-        self.chat_endpoint = f"{self.base_url}/chat"
+        self.chat_endpoint = self.base_url
         self.default_model_name = model_name
         self.default_system_prompt = system_prompt
-        self.default_chat_kwargs = kwargs  # Store other default chat parameters
+        self.api_key = api_key
+        self.default_chat_kwargs = kwargs
 
     def _make_request(self, method: str, url: str, **kwargs) -> dict[str, object]:
-        """Internal helper for HTTP requests and error handling."""
+        """
+        Internal helper for making HTTP requests with authentication and error handling.
+
+        Args:
+            method (str): The HTTP method (e.g., 'POST', 'GET').
+            url (str): The full URL for the request.
+            **kwargs: Additional arguments for the request (e.g., json, headers).
+
+        Returns:
+            dict[str, object]: The JSON response from the API.
+
+        Raises:
+            requests.exceptions.ConnectionError: If the API is unreachable.
+            requests.exceptions.RequestException: For other request-related errors.
+            ValueError: If the API returns an error in the response.
+            json.JSONDecodeError: If the response is not valid JSON.
+        """
+        headers = kwargs.get("headers", {})
+        kwargs["headers"] = headers
+
         try:
             response = requests.request(method, url, **kwargs)
             response.raise_for_status()
@@ -35,7 +68,7 @@ class LLMClient:
         except requests.exceptions.ConnectionError as e:
             raise requests.exceptions.ConnectionError(
                 f"Error: Could not connect to LLM at {self.base_url}. "
-                "Please ensure LLM is installed and running, and the API is accessible."
+                "Please ensure the service is running and the API is accessible."
             ) from e
         except requests.exceptions.RequestException as e:
             raise requests.exceptions.RequestException(
@@ -49,81 +82,127 @@ class LLMClient:
     def chat(
         self,
         user_prompt: str,
-        model_name: str,  # Explicitly expect model_name
-        system_prompt: str,  # Explicitly expect system_prompt
+        model_name: str,
+        system_prompt: str,
         stream: bool = False,
         **kwargs,
-    ) -> str | dict[str, object]:
+    ) -> dict[str, object]:
         """
-        Sends a list of messages to the LLM /api/chat endpoint and returns the model's response message.
+        Sends a chat request to a compatible LLM API (OpenAI, Google Gemini, Ollama)
+        and returns the response in a standardized format.
         """
-        data = {
-            "model": model_name,  # Use the passed model_name
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },  # Use the passed system_prompt
-                {"role": "user", "content": user_prompt},
-            ],
-            "stream": stream,
-            **kwargs,  # Pass additional kwargs from the caller
-        }
+        is_google_api = "googleapis.com" in self.base_url
+        headers = {"Content-Type": "application/json"}
+        data = {}
+        url = ""
 
-        if stream:
-            full_response_content = ""
-            final_message_role = "assistant"
+        if is_google_api:
+            # --- Google Gemini API Handling ---
+            url = f"{self.base_url}/{model_name}:generateContent"
+            if self.api_key:
+                url += f"?key={self.api_key}"
 
-            try:
-                with requests.post(
-                    self.chat_endpoint, json=data, stream=True
-                ) as response:
-                    response.raise_for_status()
-                    for chunk in response.iter_content(chunk_size=None):
-                        if chunk:
-                            try:
-                                json_chunk = json.loads(chunk)
-                                if "message" in json_chunk:
-                                    message_part = json_chunk["message"]
-                                    if "content" in message_part:
-                                        print(
-                                            message_part["content"], end="", flush=True
-                                        )
-                                        full_response_content += message_part["content"]
-                                    if "role" in message_part:
-                                        final_message_role = message_part["role"]
-                                elif "error" in json_chunk:
-                                    raise ValueError(
-                                        f"LLM API Error during stream: {json_chunk['error']}"
-                                    )
-                            except json.JSONDecodeError:
-                                continue
+            full_prompt = (
+                f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+            )
+            data = {"contents": [{"parts": [{"text": full_prompt}]}]}
 
-            except requests.exceptions.ConnectionError as e:
-                raise requests.exceptions.ConnectionError(
-                    f"Error: Could not connect to LLM at {self.base_url} during streaming. "
-                    "Please ensure LLM is installed and running, and the API is accessible."
-                ) from e
-            except requests.exceptions.RequestException as e:
-                raise requests.exceptions.RequestException(
-                    f"An error occurred during the API request: {e}"
-                ) from e
-            print()
-            return {
-                "role": final_message_role,
-                "content": full_response_content,
-            }
-        else:
-            result = self._make_request("POST", self.chat_endpoint, json=data)
-            if "message" in result:
-                return result["message"]
-            else:
-                raise ValueError(
-                    f"Unexpected response format from LLM chat API: {result}"
+            if stream:
+                print(
+                    "Warning: Streaming is not currently supported for the Google Gemini API in this client."
                 )
 
+            result = self._make_request("POST", url, json=data, headers=headers)
 
-class AgenticLLMClient(LLMClient):
+            if "candidates" in result and result.get("candidates"):
+                content = result["candidates"][0].get("content", {})
+                if "parts" in content and content.get("parts"):
+                    return {
+                        "role": "assistant",
+                        "content": content["parts"][0].get("text", ""),
+                    }
+            raise ValueError(
+                f"Unexpected response format from Google Gemini API: {result}"
+            )
+
+        else:
+            # --- OpenAI, GitHub, and Ollama API Handling ---
+            url = self.chat_endpoint
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": user_prompt})
+
+            data = {
+                "model": model_name,
+                "messages": messages,
+                "stream": stream,
+                **kwargs,
+            }
+
+            if stream:
+                full_response_content = ""
+                final_message_role = "assistant"
+                try:
+                    with requests.post(
+                        url, json=data, headers=headers, stream=True
+                    ) as response:
+                        response.raise_for_status()
+                        for chunk in response.iter_lines():
+                            if chunk:
+                                chunk_str = chunk.decode("utf-8")
+                                if chunk_str.startswith("data: "):
+                                    chunk_str = chunk_str[6:]
+                                if chunk_str == "[DONE]":
+                                    break
+                                try:
+                                    json_chunk = json.loads(chunk_str)
+                                    content_part = ""
+                                    if (
+                                        "choices" in json_chunk
+                                        and json_chunk["choices"]
+                                        and "delta" in json_chunk["choices"][0]
+                                        and "content"
+                                        in json_chunk["choices"][0]["delta"]
+                                    ):
+                                        content_part = (
+                                            json_chunk["choices"][0]["delta"]["content"]
+                                            or ""
+                                        )
+                                    elif (
+                                        "message" in json_chunk
+                                        and "content" in json_chunk["message"]
+                                    ):
+                                        content_part = json_chunk["message"]["content"]
+
+                                    if content_part:
+                                        print(content_part, end="", flush=True)
+                                        full_response_content += content_part
+                                except json.JSONDecodeError:
+                                    continue
+                except requests.exceptions.RequestException as e:
+                    raise requests.exceptions.RequestException(
+                        f"An error occurred during the API request: {e}"
+                    ) from e
+                print()
+                return {"role": final_message_role, "content": full_response_content}
+            else:
+                result = self._make_request("POST", url, json=data, headers=headers)
+                if (
+                    "choices" in result
+                    and result.get("choices")
+                    and "message" in result["choices"][0]
+                ):
+                    return result["choices"][0]["message"]
+                elif "message" in result:
+                    return result["message"]
+                raise ValueError(f"Unexpected response format from API: {result}")
+
+
+class AgenticClient(Client):
     """
     A client for interacting with the LLM API's /api/chat endpoint,
     with added capabilities for tool integration and automated orchestration.
@@ -135,9 +214,16 @@ class AgenticLLMClient(LLMClient):
         model_name: str,
         system_prompt: str | None = None,
         max_iterations: int = 3,
+        api_key: str | None = None,
         **kwargs,
     ):
-        super().__init__(base_url, model_name, system_prompt, **kwargs)
+        super().__init__(
+            base_url=base_url,
+            model_name=model_name,
+            system_prompt=system_prompt,
+            api_key=api_key,
+            **kwargs,
+        )
         self.tools: dict[str, callable] = {}
         self.tool_schemas: dict[str, dict[str, object]] = {}
         self.default_max_iterations = max_iterations
